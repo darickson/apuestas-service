@@ -1,11 +1,3 @@
-"""
-db.py — Conexión a PostgreSQL (compartida con el casino-backend).
-
-Patrón 12-factor: toda la configuración viene de variables de entorno.
-Este servicio comparte la MISMA base de datos que casino-backend (lee/escribe
-`usuarios` y `transacciones`). Sus tablas propias (`eventos_deportivos`,
-`apuestas`) las crea al arrancar de forma idempotente.
-"""
 import os
 import time
 
@@ -14,7 +6,6 @@ import psycopg2.extras
 import psycopg2.pool
 from psycopg2 import extensions
 
-# NUMERIC -> float (igual que casino-backend) para respuestas JSON nativas.
 _DEC2FLOAT = extensions.new_type(
     extensions.DECIMAL.values,
     "DEC2FLOAT",
@@ -46,7 +37,7 @@ def esperar_bd(max_intentos: int = 30, espera_s: float = 2.0) -> None:
             _pool.putconn(conn)
             print(f"[PG] Conexión establecida (intento {intento})", flush=True)
             return
-        except Exception as err:  # noqa: BLE001
+        except Exception as err: 
             ultimo_error = err
             print(f"[PG] BD no disponible ({intento}/{max_intentos}): {err}", flush=True)
             time.sleep(espera_s)
@@ -74,10 +65,6 @@ def dict_cursor(conn):
     return conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
 
-# ------------------------------------------------------------------
-# Esquema propio (idempotente). usuarios / transacciones las crea
-# casino-backend/db/init.sql en el initdb de Postgres.
-# ------------------------------------------------------------------
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS eventos_deportivos (
   id            SERIAL PRIMARY KEY,
@@ -120,13 +107,11 @@ CREATE INDEX IF NOT EXISTS idx_apuestas_usuario ON apuestas(usuario_id, creada_e
 CREATE INDEX IF NOT EXISTS idx_apuestas_evento  ON apuestas(evento_id);
 """
 
-# Índice único sobre el "partido": evita duplicar eventos en reinicios.
 _INDICE_PARTIDO = """
 CREATE UNIQUE INDEX IF NOT EXISTS uq_evento_partido
   ON eventos_deportivos (deporte, equipo_local, equipo_visita);
 """
 
-# Seed de respaldo (sin red): los 4 partidos clásicos del lab.
 _SEED_FALLBACK = """
 INSERT INTO eventos_deportivos
   (deporte, equipo_local, equipo_visita, cuota_local, cuota_empate, cuota_visita, liga) VALUES
@@ -137,21 +122,18 @@ INSERT INTO eventos_deportivos
 ON CONFLICT (deporte, equipo_local, equipo_visita) DO NOTHING;
 """
 
-# Clásicos históricos con equipos mundialmente conocidos. Los escudos reales se
-# traen de thesportsdb por nombre al sembrar. (deporte siempre 'Fútbol'.)
 _CLASICOS = [
-    ("Real Madrid", "Barcelona"),            # El Clásico
-    ("Boca Juniors", "River Plate"),         # Superclásico
-    ("Manchester United", "Manchester City"),# Derbi de Mánchester
-    ("AC Milan", "Inter Milan"),             # Derby della Madonnina
-    ("Liverpool", "Everton"),                # Derbi de Merseyside
-    ("Arsenal", "Tottenham Hotspur"),        # North London Derby
-    ("Bayern Munich", "Borussia Dortmund"),  # Der Klassiker
+    ("Real Madrid", "Barcelona"),           
+    ("Boca Juniors", "River Plate"),         
+    ("Manchester United", "Manchester City"),
+    ("AC Milan", "Inter Milan"),             
+    ("Liverpool", "Everton"),                
+    ("Arsenal", "Tottenham Hotspur"),        
+    ("Bayern Munich", "Borussia Dortmund"),   
     ("Juventus", "Napoli"),
     ("Chelsea", "Arsenal"),
-    ("Paris Saint-Germain", "Marseille"),    # Le Classique
+    ("Paris Saint-Germain", "Marseille"),    
 ]
-# Cuántos clásicos sembrar.
 _N_EVENTOS = int(os.getenv("APUESTAS_N_EVENTOS", str(len(_CLASICOS))))
 
 
@@ -161,7 +143,7 @@ def _cuotas_plausibles() -> tuple[float, float, float]:
 
     fuerza_local = random.uniform(0.30, 0.70)
     fuerza_visita = 1.0 - fuerza_local
-    cuota_empate_share = random.uniform(0.20, 0.30)  # el empate varía por partido
+    cuota_empate_share = random.uniform(0.20, 0.30)  
     p_local = fuerza_local * (1.0 - cuota_empate_share)
     p_visita = fuerza_visita * (1.0 - cuota_empate_share)
     p_empate = 1.0 - p_local - p_visita
@@ -182,15 +164,13 @@ def _sembrar_clasicos(cur) -> int:
         el = buscar_equipo(local_n)
         ev = buscar_equipo(visita_n)
         if el is None and ev is None:
-            continue  # sin red para este par; lo omite (el fallback cubre el caso global)
+            continue  
         nombre_l = el["nombre"] if el else local_n
         nombre_v = ev["nombre"] if ev else visita_n
         badge_l = el["badge"] if el else None
         badge_v = ev["badge"] if ev else None
         liga = (el and el["liga"]) or (ev and ev["liga"]) or "Clásicos"
         cl, ce, cv = _cuotas_plausibles()
-        # Si el clásico ya existe (p. ej. finalizado de una corrida previa), se
-        # REABRE como fixture fresco; si no, se inserta.
         cur.execute(
             """INSERT INTO eventos_deportivos
                  (deporte, equipo_local, equipo_visita, cuota_local, cuota_empate,
@@ -222,7 +202,6 @@ def sembrar_eventos(forzar: bool = False) -> dict:
                 if cur.fetchone()[0] > 0:
                     return {"sembrados": 0, "fuente": "ya_existian"}
             else:
-                # limpia cartelera vieja abierta que nadie apostó
                 cur.execute(
                     """DELETE FROM eventos_deportivos
                         WHERE estado = 'abierto'

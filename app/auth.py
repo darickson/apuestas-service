@@ -1,10 +1,3 @@
-"""
-auth.py — Validación del JWT EMITIDO POR casino-backend.
-
-Este microservicio NO tiene login propio. Reutiliza el mismo token que el
-frontend obtuvo de casino-backend, validándolo con el mismo `JWT_SECRET` y
-algoritmo HS256. Del payload se extrae `sub` (id), `username` y `rol`.
-"""
 import os
 
 import jwt
@@ -23,9 +16,6 @@ def usuario_actual(
     if cred is None or not cred.credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Falta token")
     try:
-        # verify_sub=False: casino-backend firma `sub` como número (id de usuario)
-        # y PyJWT 2.10+ exige que sea string. Desactivamos esa validación para
-        # interoperar con el token tal cual lo emite el backend.
         payload = jwt.decode(
             cred.credentials, JWT_SECRET, algorithms=[JWT_ALG],
             options={"verify_sub": False},

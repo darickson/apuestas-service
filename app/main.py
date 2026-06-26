@@ -1,16 +1,3 @@
-"""
-apuestas-service
-================
-Microservicio de APUESTAS DEPORTIVAS del casino (FastAPI).
-
-Comparte la base de datos y el JWT con casino-backend. Permite:
-  - Listar eventos deportivos abiertos con sus cuotas.
-  - Apostar: debita saldo y registra la apuesta (transacción atómica).
-  - Ver las apuestas propias.
-  - Resolver un evento (admin): liquida apuestas, paga las ganadoras.
-
-Prefijo de rutas: /api/apuestas
-"""
 import json
 import os
 from contextlib import asynccontextmanager
@@ -107,7 +94,6 @@ def apostar(body: ApuestaRequest, usuario: dict = Depends(usuario_actual)):
 
     with conexion() as conn:
         with dict_cursor(conn) as cur:
-            # 1) Evento abierto + cuota de la selección
             cur.execute(
                 "SELECT * FROM eventos_deportivos WHERE id = %s",
                 (body.evento_id,),
@@ -120,8 +106,6 @@ def apostar(body: ApuestaRequest, usuario: dict = Depends(usuario_actual)):
 
             cuota = float(evento[CUOTA_COL[body.seleccion]])
             ganancia = round(body.monto * cuota, 2)
-
-            # 2) Debitar saldo de forma atómica (rechaza si es insuficiente)
             cur.execute(
                 """UPDATE usuarios SET saldo = saldo - %s
                     WHERE id = %s AND saldo >= %s
@@ -132,8 +116,6 @@ def apostar(body: ApuestaRequest, usuario: dict = Depends(usuario_actual)):
             if fila is None:
                 raise HTTPException(status_code=409, detail="Saldo insuficiente")
             saldo = fila["saldo"]
-
-            # 3) Registrar transacción 'apuesta' y la apuesta pendiente
             detalle = {
                 "evento_id": evento["id"],
                 "partido": f"{evento['equipo_local']} vs {evento['equipo_visita']}",
@@ -206,21 +188,16 @@ def resolver_evento(evento_id: int, body: ResolverRequest, usuario: dict = Depen
                 raise HTTPException(status_code=404, detail="Evento no encontrado")
             if evento["estado"] == "finalizado":
                 raise HTTPException(status_code=409, detail="El evento ya fue resuelto")
-
-            # Marcar el evento como finalizado con su resultado
             cur.execute(
                 "UPDATE eventos_deportivos SET estado = 'finalizado', resultado = %s WHERE id = %s",
                 (body.resultado, evento_id),
             )
-
-            # Liquidar apuestas pendientes del evento
             cur.execute(
                 "SELECT * FROM apuestas WHERE evento_id = %s AND estado = 'pendiente'",
                 (evento_id,),
             )
             for apuesta in cur.fetchall():
                 if apuesta["seleccion"] == body.resultado:
-                    # Ganadora: acreditar ganancia + transacción 'premio'
                     cur.execute(
                         "UPDATE usuarios SET saldo = saldo + %s WHERE id = %s RETURNING saldo",
                         (apuesta["ganancia_potencial"], apuesta["usuario_id"]),
