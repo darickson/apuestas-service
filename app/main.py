@@ -1,16 +1,4 @@
-"""
-apuestas-service
-================
-Microservicio de APUESTAS DEPORTIVAS del casino (FastAPI).
 
-Comparte la base de datos y el JWT con casino-backend. Permite:
-  - Listar eventos deportivos abiertos con sus cuotas.
-  - Apostar: debita saldo y registra la apuesta (transacción atómica).
-  - Ver las apuestas propias.
-  - Resolver un evento (admin): liquida apuestas, paga las ganadoras.
-
-Prefijo de rutas: /api/apuestas
-"""
 import json
 import os
 from contextlib import asynccontextmanager
