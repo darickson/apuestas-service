@@ -1,11 +1,4 @@
-"""
-Tests del modelo de simulación (app/simulacion.py).
 
-Lógica pura (solo stdlib) → se puede correr local sin BD ni red:
-    python3 -m pytest apuestas-service/tests/test_simulacion.py
-o sin pytest:
-    python3 apuestas-service/tests/test_simulacion.py
-"""
 import os
 import sys
 
@@ -23,7 +16,7 @@ def test_estructura_resultado():
 
 
 def test_marcador_consistente_con_resultado():
-    """El resultado SIEMPRE corresponde al marcador (por construcción)."""
+
     for _ in range(500):
         r = simular_partido(1.8, 3.5, 4.5)
         gl, gv = r["marcador"]["local"], r["marcador"]["visita"]
@@ -32,13 +25,14 @@ def test_marcador_consistente_con_resultado():
 
 
 def test_goles_coinciden_con_marcador():
-    """La cantidad de goles por equipo coincide con el marcador."""
+
     for _ in range(200):
         r = simular_partido(2.5, 3.2, 2.7)
         locales = sum(1 for g in r["goles"] if g["equipo"] == "local")
         visitas = sum(1 for g in r["goles"] if g["equipo"] == "visita")
         assert locales == r["marcador"]["local"]
         assert visitas == r["marcador"]["visita"]
+
 
 
 def test_minutos_validos_y_ordenados():
@@ -76,6 +70,7 @@ def test_simetria_no_sesga_a_un_lado_por_codigo():
             gv += 1
     # Diferencia relativa pequeña (tolerancia amplia por aleatoriedad)
     assert abs(gl - gv) / n < 0.08, f"sesgo: local={gl} visita={gv}"
+
 
 
 if __name__ == "__main__":
